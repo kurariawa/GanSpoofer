@@ -7,20 +7,25 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 import top.nekoha.ganspoofer.annotations.HookClass
 import top.nekoha.ganspoofer.annotations.HookConstructor
 import top.nekoha.ganspoofer.annotations.HookMethod
+import top.nekoha.ganspoofer.annotations.HookType
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 class HookManager {
     companion object {
         private const val TAG = "GanSpoofer"
-        private const val HOOK_PACKAGE = "top.nekoha.ganspoofer.hook"
+
+        private var hookClasses: List<Class<*>>? = null;
+
+        fun addHook(hookClass: Class<*>) {
+            hookClasses = hookClasses?.plus(hookClass)
+        }
 
         fun registerHooks(lpparam: XC_LoadPackage.LoadPackageParam) {
             try {
-                val hookClasses = findHookClasses(lpparam.classLoader)
                 var totalHooks = 0
 
-                hookClasses.forEach { clazz ->
+                hookClasses?.forEach { clazz ->
                     val hookClassAnnotation = clazz.getAnnotation(HookClass::class.java)
                     if (hookClassAnnotation?.packageName == lpparam.packageName) {
                         val hooksCount = registerHooksFromClass(clazz, lpparam)
@@ -33,37 +38,6 @@ class HookManager {
             } catch (e: Exception) {
                 Log.e(TAG, "Error registering hooks", e)
             }
-        }
-
-        private fun findHookClasses(classLoader: ClassLoader): List<Class<*>> {
-            val hookClasses = mutableListOf<Class<*>>()
-
-            try {
-                val potentialClassNames = listOf(
-                    "$HOOK_PACKAGE.BluetoothHook",
-                    "$HOOK_PACKAGE.DeviceHook",
-                    "$HOOK_PACKAGE.PermissionHook",
-                    "$HOOK_PACKAGE.LocationHook"
-                )
-
-                potentialClassNames.forEach { className ->
-                    try {
-                        val clazz = classLoader.loadClass(className)
-                        if (clazz.isAnnotationPresent(HookClass::class.java)) {
-                            hookClasses.add(clazz)
-                            Log.d(TAG, "Found hook class: $className")
-                        }
-                    } catch (e: ClassNotFoundException) {
-                        Log.w(TAG, "Hook class not found: $className", e)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error loading hook class: $className", e)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error finding hook classes", e)
-            }
-
-            return hookClasses
         }
 
         private fun registerHooksFromClass(clazz: Class<*>, lpparam: XC_LoadPackage.LoadPackageParam): Int {
@@ -90,18 +64,14 @@ class HookManager {
                             *parameterTypes,
                             object : XC_MethodHook() {
                                 override fun beforeHookedMethod(param: MethodHookParam) {
-                                    try {
-                                        method.invoke(null, param)
-                                    } catch (e: Exception) {
+                                    if(annotation.hookType == HookType.BEFORE) {
+                                        method.invoke(null,param)
                                     }
                                 }
 
                                 override fun afterHookedMethod(param: MethodHookParam) {
-                                    try {
-                                        val afterMethodName = method.name.substringBefore("Hook") + "AfterHook"
-                                        val afterMethod = findMethodByName(clazz, afterMethodName)
-                                        afterMethod?.invoke(null, param)
-                                    } catch (e: Exception) {
+                                    if(annotation.hookType == HookType.AFTER) {
+                                        method.invoke(null, param)
                                     }
                                 }
                             }
@@ -170,16 +140,4 @@ class HookManager {
             }
         }
     }
-}
-
-data class HookInfo(
-    val className: String,
-    val methodName: String,
-    val hookType: HookType,
-    val parameterTypes: Array<String> = emptyArray(),
-)
-
-enum class HookType {
-    METHOD,
-    CONSTRUCTOR,
 }

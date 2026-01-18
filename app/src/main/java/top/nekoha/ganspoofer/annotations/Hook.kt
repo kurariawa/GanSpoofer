@@ -10,6 +10,7 @@ annotation class HookMethod(
     val className: String = "",
     val methodName: String = "",
     val parameterTypes: Array<String> = [],
+    val hookType: HookType,
 )
 
 @Target(AnnotationTarget.FUNCTION)
@@ -18,3 +19,8 @@ annotation class HookConstructor(
     val className: String = "",
     val parameterTypes: Array<String> = [],
 )
+
+enum class HookType {
+    BEFORE,
+    AFTER,
+}
